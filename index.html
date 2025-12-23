@@ -19,6 +19,7 @@
             --accent-red: #ff4d4d;
             --accent-blue: #00f3ff;
             --accent-purple: #bd00ff;
+            --accent-orange: #ff9d00;
             --border-color: #333;
         }
 
@@ -120,9 +121,14 @@
         .pass-glow { border-color: var(--accent-green); box-shadow: 0 0 20px rgba(0, 255, 157, 0.1) inset; }
         .pass-glow h2 { color: var(--accent-green); }
         .pass-glow .verdict-badge { background: var(--accent-green); color: #000; box-shadow: 0 0 15px var(--accent-green); }
+        
         .fail-glow { border-color: var(--accent-red); box-shadow: 0 0 20px rgba(255, 77, 77, 0.1) inset; }
         .fail-glow h2 { color: var(--accent-red); }
         .fail-glow .verdict-badge { background: var(--accent-red); color: #fff; box-shadow: 0 0 15px var(--accent-red); }
+
+        .warn-glow { border-color: var(--accent-orange); box-shadow: 0 0 20px rgba(255, 157, 0, 0.1) inset; }
+        .warn-glow h2 { color: var(--accent-orange); }
+        .warn-glow .verdict-badge { background: var(--accent-orange); color: #000; box-shadow: 0 0 15px var(--accent-orange); }
 
         /* 圖表區 */
         .charts-container {
@@ -150,7 +156,7 @@
 <body>
 
 <div class="container">
-    <h1>📊 土堆 TPH 篩測均勻度分析 <span style="font-size:0.5em; vertical-align:middle; opacity:0.6;"></span></h1>
+    <h1>📊 土堆 TPH 篩測均勻度分析</h1>
 
     <div class="input-panel">
         <div class="input-group">
@@ -201,17 +207,17 @@
         <div class="stat-card card-red">
             <div class="stat-label">變異係數 (CV)</div>
             <div class="stat-value" id="valCV">-</div>
-            <div class="stat-sub">數值越小代表越均勻</div>
+            <div class="stat-sub">標準: 必須 &le; 50%</div>
         </div>
     </div>
 
     <div class="charts-container" id="chartsArea">
         <div class="chart-box">
-            <div class="chart-title">採樣點分布 </div>
+            <div class="chart-title">採樣點分布 (紅線為標準)</div>
             <canvas id="barChart"></canvas>
         </div>
         <div class="chart-box">
-            <div class="chart-title">CDF 累積機率 (整治信心度)</div>
+            <div class="chart-title">CDF 累積機率 </div>
             <canvas id="cdfChart"></canvas>
         </div>
     </div>
@@ -262,7 +268,7 @@
         event.target.value = '';
     }
 
-    // --- 統計分析核心邏輯 (與之前相同) ---
+    // --- 統計分析核心邏輯 ---
     Chart.defaults.color = '#a0a0a0';
     Chart.defaults.borderColor = '#333';
     
@@ -311,34 +317,48 @@
         
         const cvElem = document.getElementById('valCV');
         cvElem.innerText = (cv * 100).toFixed(0) + "%";
+        // CV 顏色指示：大於 50% 變紅色
         cvElem.style.color = cv > 0.5 ? 'var(--accent-red)' : 'var(--accent-green)';
 
         const probElem = document.getElementById('valProb');
         probElem.innerText = probPct + "%";
         probElem.style.color = probPct >= 95 ? 'var(--accent-green)' : 'var(--accent-red)';
 
+        // --- 判定邏輯 (修改處) ---
         const vPanel = document.getElementById('verdictPanel');
         const vTitle = document.getElementById('verdictTitle');
         const vDesc = document.getElementById('verdictDesc');
         const vBadge = document.getElementById('verdictBadge');
 
-        vPanel.classList.remove('pass-glow', 'fail-glow');
+        vPanel.classList.remove('pass-glow', 'fail-glow', 'warn-glow');
 
-        if (ucl < limit && probPct >= 95) {
-            vPanel.classList.add('pass-glow');
-            vTitle.innerText = "驗收判定：合格 (PASS)";
-            vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 低於標準，且統計達標率極高。`;
-            vBadge.innerText = "SAFE";
-        } else if (mean < limit) {
-            vPanel.classList.add('fail-glow');
-            vTitle.innerText = "判定：高風險 (High Risk)";
-            vDesc.innerText = `雖然平均值 (${mean.toFixed(0)}) 合格，但 UCL 超標或均勻度不足，建議翻堆。`;
-            vBadge.innerText = "WARNING";
-        } else {
+        // 優先順序 1: 平均值已超標 -> 絕對不合格
+        if (mean >= limit) {
             vPanel.classList.add('fail-glow');
             vTitle.innerText = "判定：不合格 (FAIL)";
             vDesc.innerText = "平均濃度已超過管制標準，必須進行整治。";
             vBadge.innerText = "DANGER";
+        } 
+        // 優先順序 2: CV > 50% -> 判定為不合格 (均勻度問題)
+        else if (cv > 0.5) {
+            vPanel.classList.add('fail-glow'); // 使用紅色警戒
+            vTitle.innerText = "判定：不合格 (均勻度差)";
+            vDesc.innerText = `CV 為 ${(cv*100).toFixed(0)}% (大於50%)，土堆混合不均，數據離散過大。`;
+            vBadge.innerText = "NON-UNIFORM";
+        }
+        // 優先順序 3: 合格
+        else if (ucl < limit && probPct >= 95) {
+            vPanel.classList.add('pass-glow');
+            vTitle.innerText = "驗收判定：合格 (PASS)";
+            vDesc.innerText = `95% UCL 低於標準，且均勻度良好 (CV ${(cv*100).toFixed(0)}%)。`;
+            vBadge.innerText = "SAFE";
+        } 
+        // 優先順序 4: 風險 (平均合格、CV合格，但 UCL 偏高)
+        else {
+            vPanel.classList.add('warn-glow');
+            vTitle.innerText = "判定：風險 (High Risk)";
+            vDesc.innerText = `平均值合格但接近臨界點，95% UCL (${ucl.toFixed(0)}) 超標。`;
+            vBadge.innerText = "WARNING";
         }
 
         drawCharts(data, mean, std, limit);
@@ -426,6 +446,3 @@
 
 </body>
 </html>
-
-
-
