@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>土堆 TPH 篩測均勻度分析</title>
+    <title>土堆 TPH 篩測均勻度分析 (90%標準版)</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -156,7 +156,7 @@
 <body>
 
 <div class="container">
-    <h1>📊 土堆 TPH 篩測均勻度分析</h1>
+    <h1>📊 土堆 TPH 篩測均勻度分析 (90%標準)</h1>
 
     <div class="input-panel">
         <div class="input-group">
@@ -201,7 +201,7 @@
         <div class="stat-card card-green">
             <div class="stat-label">符合標準機率</div>
             <div class="stat-value" id="valProb">-</div>
-            <div class="stat-sub">基於 CDF 模型推估</div>
+            <div class="stat-sub">目標: &ge; 90%</div>
         </div>
 
         <div class="stat-card card-red">
@@ -217,7 +217,7 @@
             <canvas id="barChart"></canvas>
         </div>
         <div class="chart-box">
-            <div class="chart-title">CDF 累積機率 </div>
+            <div class="chart-title">CDF 累積機率 (整治信心度)</div>
             <canvas id="cdfChart"></canvas>
         </div>
     </div>
@@ -302,6 +302,7 @@
         const std = Math.sqrt(variance);
         const cv = std / mean;
 
+        // 計算 95% UCL (維持法規標準指標)
         let t = n > 30 ? 1.645 : 1.833; 
         const ucl = mean + (t * (std / Math.sqrt(n)));
         
@@ -322,9 +323,10 @@
 
         const probElem = document.getElementById('valProb');
         probElem.innerText = probPct + "%";
-        probElem.style.color = probPct >= 95 ? 'var(--accent-green)' : 'var(--accent-red)';
+        // 判定顏色改為 90% 為界線
+        probElem.style.color = probPct >= 90 ? 'var(--accent-green)' : 'var(--accent-red)';
 
-        // --- 判定邏輯 (修改處) ---
+        // --- 判定邏輯 (標準改為 90%) ---
         const vPanel = document.getElementById('verdictPanel');
         const vTitle = document.getElementById('verdictTitle');
         const vDesc = document.getElementById('verdictDesc');
@@ -346,18 +348,25 @@
             vDesc.innerText = `CV 為 ${(cv*100).toFixed(0)}% (大於50%)，土堆混合不均，數據離散過大。`;
             vBadge.innerText = "NON-UNIFORM";
         }
-        // 優先順序 3: 合格
-        else if (ucl < limit && probPct >= 95) {
+        // 優先順序 3: 合格 (UCL 合格 且 信心水準 > 90%)
+        else if (ucl < limit && probPct >= 90) {
             vPanel.classList.add('pass-glow');
             vTitle.innerText = "驗收判定：合格 (PASS)";
-            vDesc.innerText = `95% UCL 低於標準，且均勻度良好 (CV ${(cv*100).toFixed(0)}%)。`;
+            vDesc.innerText = `95% UCL 低於標準，且符合標準機率已達 90% 以上。`;
             vBadge.innerText = "SAFE";
         } 
-        // 優先順序 4: 風險 (平均合格、CV合格，但 UCL 偏高)
+        // 優先順序 4: 風險 (UCL 超標 或 信心水準不足 90%)
         else {
             vPanel.classList.add('warn-glow');
             vTitle.innerText = "判定：風險 (High Risk)";
-            vDesc.innerText = `平均值合格但接近臨界點，95% UCL (${ucl.toFixed(0)}) 超標。`;
+            
+            // 區分原因
+            if (ucl >= limit) {
+                vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 已超過管制標準，具驗收風險。`;
+            } else {
+                vDesc.innerText = `雖然 UCL 合格，但單點超標導致信心水準 (${probPct}%) 不足 90%。`;
+            }
+            
             vBadge.innerText = "WARNING";
         }
 
@@ -429,8 +438,9 @@
                                 label: { content: '標準 800', enabled: true, position: 'start', backgroundColor: '#333' }
                             },
                             line2: {
-                                type: 'line', yMin: 95, yMax: 95, borderColor: '#bd00ff', borderWidth: 1, borderDash: [4, 4],
-                                label: { content: '95% 信心線', enabled: true, position: 'end', backgroundColor: '#bd00ff', color: 'white' }
+                                // 修改為 90% 信心線
+                                type: 'line', yMin: 90, yMax: 90, borderColor: '#bd00ff', borderWidth: 1, borderDash: [4, 4],
+                                label: { content: '90% 信心線', enabled: true, position: 'end', backgroundColor: '#bd00ff', color: 'white' }
                             }
                         }
                     }
