@@ -156,7 +156,7 @@
 <body>
 
 <div class="container">
-    <h1>📊 土堆 TPH 篩測均勻度分析 (UCL<1000)</h1>
+    <h1>📊 土堆 TPH 篩測均勻度分析</h1>
 
     <div class="input-panel">
         <div class="input-group">
@@ -195,7 +195,7 @@
         <div class="stat-card card-purple">
             <div class="stat-label">95% UCL 上限值</div>
             <div class="stat-value" style="color:var(--accent-purple)" id="valUCL">-</div>
-            <div class="stat-sub">容許上限 < 1000</div>
+            <div class="stat-sub">容許上限 < 800</div>
         </div>
 
         <div class="stat-card card-green">
@@ -217,7 +217,7 @@
             <canvas id="barChart"></canvas>
         </div>
         <div class="chart-box">
-            <div class="chart-title">CDF 累積機率 (整治信心度)</div>
+            <div class="chart-title">CDF 累積機率</div>
             <canvas id="cdfChart"></canvas>
         </div>
     </div>
@@ -350,11 +350,11 @@
             vDesc.innerText = `CV 為 ${(cv*100).toFixed(0)}% (大於50%)，土堆混合不均。`;
             vBadge.innerText = "NON-UNIFORM";
         }
-        // 3. 合格 (UCL < 1000 且 機率 >= 90%)
+        // 3. 合格 (UCL < 800 且 機率 >= 90%)
         else if (ucl < uclLimit && probPct >= 90) {
             vPanel.classList.add('pass-glow');
             vTitle.innerText = "驗收判定：合格 (PASS)";
-            vDesc.innerText = `UCL (${ucl.toFixed(0)}) 低於容許值 1000，且符合標準機率達 90% 以上。`;
+            vDesc.innerText = `UCL (${ucl.toFixed(0)}) 低於容許值 800，且符合標準機率達 90% 以上。`;
             vBadge.innerText = "SAFE";
         } 
         // 4. 風險
@@ -363,7 +363,7 @@
             vTitle.innerText = "判定：風險 (High Risk)";
             
             if (ucl >= uclLimit) {
-                vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 超過容許上限 (1000)，具驗收風險。`;
+                vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 超過容許上限 (800)，具驗收風險。`;
             } else {
                 vDesc.innerText = `雖然 UCL 合格，但單點超標導致信心水準 (${probPct}%) 不足 90%。`;
             }
@@ -401,7 +401,7 @@
                             },
                             line2: {
                                 type: 'line', yMin: uclLimit, yMax: uclLimit, borderColor: '#bd00ff', borderWidth: 1, borderDash: [2, 2],
-                                label: { content: 'UCL上限 1000', enabled: true, backgroundColor: '#333', color: '#bd00ff', position: 'end' }
+                                label: { content: 'UCL上限 800', enabled: true, backgroundColor: '#333', color: '#bd00ff', position: 'end' }
                             }
                         }
                     }
@@ -452,3 +452,4 @@
                 scales: {
                     x: { type: 'linear', title: { display: true, text: '濃度 (mg/kg)', color: '#666' }, grid: { color: '#333' } },
                     y: { min: 0, max:
+
