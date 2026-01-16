@@ -156,13 +156,13 @@
 <body>
 
 <div class="container">
-    <h1>📊 土堆 TPH 篩測均勻度分析 (90%標準)</h1>
+    <h1>📊 土堆 TPH 篩測均勻度分析 (UCL<1000)</h1>
 
     <div class="input-panel">
         <div class="input-group">
             <label>1. 輸入數據 (可手動輸入 或 匯入 Excel)</label>
             <textarea id="dataInput" placeholder="請輸入 TPH 數值 (以逗號分隔)，或點擊右側匯入按鈕..."></textarea>
-            <div style="font-size:12px; color:#666;">目標標準: 800 mg/kg</div>
+            <div style="font-size:12px; color:#666;">目標標準 (Mean): 800 mg/kg | UCL 容許值: 1000 mg/kg</div>
         </div>
         
         <div class="btn-group">
@@ -195,7 +195,7 @@
         <div class="stat-card card-purple">
             <div class="stat-label">95% UCL 上限值</div>
             <div class="stat-value" style="color:var(--accent-purple)" id="valUCL">-</div>
-            <div class="stat-sub">法規驗收關鍵指標</div>
+            <div class="stat-sub">容許上限 < 1000</div>
         </div>
 
         <div class="stat-card card-green">
@@ -213,7 +213,7 @@
 
     <div class="charts-container" id="chartsArea">
         <div class="chart-box">
-            <div class="chart-title">採樣點分布 (紅線為標準)</div>
+            <div class="chart-title">採樣點分布 (紅線:800 / 紫線:1000)</div>
             <canvas id="barChart"></canvas>
         </div>
         <div class="chart-box">
@@ -295,17 +295,19 @@
             return; 
         }
 
-        const limit = 800;
+        const limit = 800;       // 平均值與機率計算的基準標準
+        const uclLimit = 1000;   // UCL 的專屬寬限值
         const n = data.length;
         const mean = data.reduce((a,b)=>a+b,0) / n;
         const variance = data.reduce((a,b)=>a+Math.pow(b-mean,2),0) / (n-1);
         const std = Math.sqrt(variance);
         const cv = std / mean;
 
-        // 計算 95% UCL (維持法規標準指標)
+        // 計算 95% UCL
         let t = n > 30 ? 1.645 : 1.833; 
         const ucl = mean + (t * (std / Math.sqrt(n)));
         
+        // 計算符合 800 標準的機率
         const prob = normalCDF(limit, mean, std);
         const probPct = (prob * 100).toFixed(1);
 
@@ -315,18 +317,18 @@
 
         document.getElementById('valMean').innerText = mean.toFixed(0);
         document.getElementById('valUCL').innerText = ucl.toFixed(0);
+        // UCL 顏色：超過 1000 變紅
+        document.getElementById('valUCL').style.color = ucl > uclLimit ? 'var(--accent-red)' : 'var(--accent-purple)';
         
         const cvElem = document.getElementById('valCV');
         cvElem.innerText = (cv * 100).toFixed(0) + "%";
-        // CV 顏色指示：大於 50% 變紅色
         cvElem.style.color = cv > 0.5 ? 'var(--accent-red)' : 'var(--accent-green)';
 
         const probElem = document.getElementById('valProb');
         probElem.innerText = probPct + "%";
-        // 判定顏色改為 90% 為界線
         probElem.style.color = probPct >= 90 ? 'var(--accent-green)' : 'var(--accent-red)';
 
-        // --- 判定邏輯 (標準改為 90%) ---
+        // --- 判定邏輯 (UCL < 1000 且 機率 > 90%) ---
         const vPanel = document.getElementById('verdictPanel');
         const vTitle = document.getElementById('verdictTitle');
         const vDesc = document.getElementById('verdictDesc');
@@ -334,35 +336,34 @@
 
         vPanel.classList.remove('pass-glow', 'fail-glow', 'warn-glow');
 
-        // 優先順序 1: 平均值已超標 -> 絕對不合格
+        // 1. 平均值超標 (絕對 Fail)
         if (mean >= limit) {
             vPanel.classList.add('fail-glow');
             vTitle.innerText = "判定：不合格 (FAIL)";
-            vDesc.innerText = "平均濃度已超過管制標準，必須進行整治。";
+            vDesc.innerText = `平均濃度 (${mean.toFixed(0)}) 已超過管制標準 (800)，必須進行整治。`;
             vBadge.innerText = "DANGER";
         } 
-        // 優先順序 2: CV > 50% -> 判定為不合格 (均勻度問題)
+        // 2. CV 過高 (均勻度 Fail)
         else if (cv > 0.5) {
-            vPanel.classList.add('fail-glow'); // 使用紅色警戒
+            vPanel.classList.add('fail-glow');
             vTitle.innerText = "判定：不合格 (均勻度差)";
-            vDesc.innerText = `CV 為 ${(cv*100).toFixed(0)}% (大於50%)，土堆混合不均，數據離散過大。`;
+            vDesc.innerText = `CV 為 ${(cv*100).toFixed(0)}% (大於50%)，土堆混合不均。`;
             vBadge.innerText = "NON-UNIFORM";
         }
-        // 優先順序 3: 合格 (UCL 合格 且 信心水準 > 90%)
-        else if (ucl < limit && probPct >= 90) {
+        // 3. 合格 (UCL < 1000 且 機率 >= 90%)
+        else if (ucl < uclLimit && probPct >= 90) {
             vPanel.classList.add('pass-glow');
             vTitle.innerText = "驗收判定：合格 (PASS)";
-            vDesc.innerText = `95% UCL 低於標準，且符合標準機率已達 90% 以上。`;
+            vDesc.innerText = `UCL (${ucl.toFixed(0)}) 低於容許值 1000，且符合標準機率達 90% 以上。`;
             vBadge.innerText = "SAFE";
         } 
-        // 優先順序 4: 風險 (UCL 超標 或 信心水準不足 90%)
+        // 4. 風險
         else {
             vPanel.classList.add('warn-glow');
             vTitle.innerText = "判定：風險 (High Risk)";
             
-            // 區分原因
-            if (ucl >= limit) {
-                vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 已超過管制標準，具驗收風險。`;
+            if (ucl >= uclLimit) {
+                vDesc.innerText = `95% UCL (${ucl.toFixed(0)}) 超過容許上限 (1000)，具驗收風險。`;
             } else {
                 vDesc.innerText = `雖然 UCL 合格，但單點超標導致信心水準 (${probPct}%) 不足 90%。`;
             }
@@ -370,10 +371,10 @@
             vBadge.innerText = "WARNING";
         }
 
-        drawCharts(data, mean, std, limit);
+        drawCharts(data, mean, std, limit, uclLimit);
     }
 
-    function drawCharts(data, mean, std, limit) {
+    function drawCharts(data, mean, std, limit, uclLimit) {
         const ctxBar = document.getElementById('barChart').getContext('2d');
         if (charts.bar) charts.bar.destroy();
         
@@ -397,6 +398,10 @@
                             line1: {
                                 type: 'line', yMin: limit, yMax: limit, borderColor: '#ff4d4d', borderWidth: 2, borderDash: [6, 4],
                                 label: { content: '標準 800', enabled: true, backgroundColor: '#333', color: '#ff4d4d' }
+                            },
+                            line2: {
+                                type: 'line', yMin: uclLimit, yMax: uclLimit, borderColor: '#bd00ff', borderWidth: 1, borderDash: [2, 2],
+                                label: { content: 'UCL上限 1000', enabled: true, backgroundColor: '#333', color: '#bd00ff', position: 'end' }
                             }
                         }
                     }
@@ -438,7 +443,6 @@
                                 label: { content: '標準 800', enabled: true, position: 'start', backgroundColor: '#333' }
                             },
                             line2: {
-                                // 修改為 90% 信心線
                                 type: 'line', yMin: 90, yMax: 90, borderColor: '#bd00ff', borderWidth: 1, borderDash: [4, 4],
                                 label: { content: '90% 信心線', enabled: true, position: 'end', backgroundColor: '#bd00ff', color: 'white' }
                             }
@@ -447,13 +451,4 @@
                 },
                 scales: {
                     x: { type: 'linear', title: { display: true, text: '濃度 (mg/kg)', color: '#666' }, grid: { color: '#333' } },
-                    y: { min: 0, max: 105, title: { display: true, text: '機率 (%)', color: '#666' }, grid: { color: '#333' } }
-                }
-            }
-        });
-    }
-</script>
-
-</body>
-</html>
-
+                    y: { min: 0, max:
